@@ -18,16 +18,22 @@ COLORS = {BLACK: [0.0, 0.0, 0.0], GRAY: [0.5, 0.5, 0.5],
           RED: [1.0, 0.0, 0.0], PINK: [1.0, 0.0, 1.0],
           YELLOW: [1.0, 1.0, 0.0]}
 
+NOOP = 0
+DOWN = 1
+UP = 2
+LEFT = 3
+RIGHT = 4
+
 
 class GridworldEnv(gym.Env):
     metadata = {'render.modes': ['human']}
     num_env = 0
 
     def __init__(self, plan):
-        self.actions = [0, 1, 2, 3, 4]
+        self.actions = [NOOP, DOWN, UP, LEFT, RIGHT]
         self.inv_actions = [0, 2, 1, 4, 3]
         self.action_space = spaces.Discrete(5)
-        self.action_pos_dict = {0: [0, 0], 1: [-1, 0], 2: [1, 0], 3: [0, -1], 4: [0, 1]}
+        self.action_pos_dict = {NOOP: [0, 0], DOWN: [-1, 0], UP: [1, 0], LEFT: [0, -1], RIGHT: [0, 1]}
 
         # set observation space
         self.obs_shape = [128, 128, 3]  # observation space shape
@@ -64,7 +70,7 @@ class GridworldEnv(gym.Env):
         nxt_agent_state = (self.agent_state[0] + self.action_pos_dict[action][0],
                            self.agent_state[1] + self.action_pos_dict[action][1])
 
-        if action == 0:  # stay in place
+        if action == NOOP:
             info['success'] = True
             return self.observation, 0, False, info
         next_state_out_of_map = (nxt_agent_state[0] < 0 or nxt_agent_state[0] >= self.grid_map_shape[0]) or \
@@ -204,3 +210,7 @@ class GridworldEnv(gym.Env):
     def _close_env(self):
         plt.close(1)
         return
+
+    @staticmethod
+    def get_action_meaning():
+        return ['NOOP', 'DOWN', 'UP', 'LEFT', 'RIGHT']
