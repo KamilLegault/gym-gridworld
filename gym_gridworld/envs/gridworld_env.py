@@ -36,14 +36,13 @@ class GridworldEnv(gym.Env):
         self.action_space = spaces.Discrete(5)
         self.action_pos_dict = {NOOP: [0, 0], UP: [-1, 0], DOWN: [1, 0], LEFT: [0, -1], RIGHT: [0, 1]}
 
-        self.img_shape = [128, 128, 3]  # observation space shape
+        self.img_shape = [256, 256, 3]  # observation space shape
 
         # initialize system state
         this_file_path = os.path.dirname(os.path.realpath(__file__))
         self.grid_map_path = os.path.join(this_file_path, 'plan{}.txt'.format(plan))
         self.start_grid_map = self._read_grid_map(self.grid_map_path)  # initial grid map
         self.current_grid_map = copy.deepcopy(self.start_grid_map)  # current grid map
-        self.img = self._gridmap_to_image(self.start_grid_map)
         self.grid_map_shape = self.start_grid_map.shape
         self.observation_space = spaces.Box(low=0, high=6, shape=self.grid_map_shape)
 
@@ -53,18 +52,10 @@ class GridworldEnv(gym.Env):
 
         # set other parameters
         self.restart_once_done = False  # restart or not once done
-        self.verbose = False  # to show the environment or not
 
         GridworldEnv.num_env += 1
         self.this_fig_num = GridworldEnv.num_env
-        if self.verbose:
-            self.init_plt()
-
-    def init_plt(self):
-        self.fig = plt.figure(self.this_fig_num)
-        plt.show(block=False)
-        plt.axis('off')
-        self._render()
+        self.viewer = None
 
     def _step(self, action):
         """ return next observation, reward, finished, success """
@@ -105,17 +96,11 @@ class GridworldEnv(gym.Env):
             if self.restart_once_done:
                 self._reset()
 
-        if self.verbose:
-            self.img = self._gridmap_to_image(self.current_grid_map)
-            self._render()
-
         return self.current_grid_map, reward, done, info
 
     def _reset(self):
         self.agent_state = copy.deepcopy(self.agent_start_state)
         self.current_grid_map = copy.deepcopy(self.start_grid_map)
-        self.img = self._gridmap_to_image(self.start_grid_map)
-        self._render()
         return self.current_grid_map
 
     def _read_grid_map(self, grid_map_path):
@@ -145,35 +130,34 @@ class GridworldEnv(gym.Env):
 
         return start_state, target_state
 
-    def _gridmap_to_image(self, grid_map, img_shape=None):
+    def _gridmap_to_image(self, img_shape=None):
         if img_shape is None:
             img_shape = self.img_shape
         observation = np.random.randn(*img_shape) * 0.0
-        gs0 = int(observation.shape[0] / grid_map.shape[0])
-        gs1 = int(observation.shape[1] / grid_map.shape[1])
-        for i in range(grid_map.shape[0]):
-            for j in range(grid_map.shape[1]):
+        gs0 = int(observation.shape[0] / self.current_grid_map.shape[0])
+        gs1 = int(observation.shape[1] / self.current_grid_map.shape[1])
+        for i in range(self.current_grid_map.shape[0]):
+            for j in range(self.current_grid_map.shape[1]):
                 for k in range(3):
-                    this_value = COLORS[grid_map[i, j]][k]
+                    this_value = COLORS[self.current_grid_map[i, j]][k]
                     observation[i * gs0:(i + 1) * gs0, j * gs1:(j + 1) * gs1, k] = this_value
-        return observation
+        return (255*observation).astype(np.uint8)
 
     def _render(self, mode='human', close=False):
         if close:
-            self.verbose = False
-            plt.close(1)
+            if self.viewer is not None:
+                self.viewer.close()
+                self.viewer = None
             return
-        if mode == 'human':
-            if not self.verbose:
-                self.verbose = True
-                self.init_plt()
-            fig = plt.figure(self.this_fig_num)
-            plt.clf()
-            plt.imshow(self.img)
-            fig.canvas.draw()
-            plt.pause(0.000005)
-        elif mode == 'rgb':
-            return self.img
+
+        img = self._gridmap_to_image()
+        if mode == 'rgb_array':
+            return img
+        elif mode == 'human':
+            from gym.envs.classic_control import rendering
+            if self.viewer is None:
+                self.viewer = rendering.SimpleImageViewer()
+            self.viewer.imshow(img)
 
     def change_start_state(self, sp):
         """ change agent start state
@@ -190,7 +174,6 @@ class GridworldEnv(gym.Env):
             self.start_grid_map[sp[0], sp[1]] = AGENT
             self.current_grid_map = copy.deepcopy(self.start_grid_map)
             self.agent_start_state = [sp[0], sp[1]]
-            self.img = self._gridmap_to_image(self.current_grid_map)
             self.agent_state = copy.deepcopy(self.agent_start_state)
             self._reset()
             self._render()
@@ -208,15 +191,10 @@ class GridworldEnv(gym.Env):
             self.start_grid_map[tg[0], tg[1]] = TARGET
             self.current_grid_map = copy.deepcopy(self.start_grid_map)
             self.agent_target_state = [tg[0], tg[1]]
-            self.img = self._gridmap_to_image(self.current_grid_map)
             self.agent_state = copy.deepcopy(self.agent_start_state)
             self._reset()
             self._render()
         return True
-
-    def _close_env(self):
-        plt.close(1)
-        return
 
     @staticmethod
     def get_action_meaning():
