@@ -3,14 +3,14 @@ import sys
 import os
 import copy
 from gym import spaces
+from gym.utils import seeding
 import numpy as np
-import matplotlib.pyplot as plt
 
 EMPTY = BLACK = 0
 WALL = GRAY = 1
-BLUE = 2
+MINE = RED = 2
 TARGET = GREEN = 3
-AGENT = RED = 4
+AGENT = BLUE = 4
 SUCCESS = PINK = 6
 YELLOW = 7
 COLORS = {BLACK: [0.0, 0.0, 0.0], GRAY: [0.5, 0.5, 0.5],
@@ -29,8 +29,9 @@ class GridworldEnv(gym.Env):
     metadata = {'render.modes': ['human']}
     num_env = 0
 
-    def __init__(self, plan):
+    def __init__(self, plan, stochastic=False):
 
+        self.stochastic = stochastic
         self.actions = [NOOP, UP, DOWN, LEFT, RIGHT]
         self.inv_actions = [0, 2, 1, 4, 3]
         self.action_space = spaces.Discrete(5)
@@ -40,15 +41,17 @@ class GridworldEnv(gym.Env):
 
         # initialize system state
         this_file_path = os.path.dirname(os.path.realpath(__file__))
-        self.grid_map_path = os.path.join(this_file_path, 'plan{}.txt'.format(plan))
-        self.start_grid_map = self._read_grid_map(self.grid_map_path)  # initial grid map
+        grid_map_path = os.path.join(this_file_path, 'plan{}{}.txt'.format(plan, 's' if stochastic else ''))
+        self.start_grid_map = self._read_grid_map(grid_map_path)  # initial grid map
         self.current_grid_map = copy.deepcopy(self.start_grid_map)  # current grid map
+        if stochastic:
+            self.select_stochastic(self.current_grid_map, TARGET)
+            self.select_stochastic(self.current_grid_map, AGENT)
         self.grid_map_shape = self.start_grid_map.shape
         self.observation_space = spaces.Box(low=0, high=6, shape=self.grid_map_shape)
 
         # agent state: start, target, current state
-        self.agent_start_state, self.agent_target_state = self._get_agent_start_target_state()
-        self.agent_state = copy.deepcopy(self.agent_start_state)
+        self.agent_start_state, self.agent_target_state = self._get_agent_start_and_target_state()
 
         # set other parameters
         self.restart_once_done = False  # restart or not once done
@@ -57,17 +60,20 @@ class GridworldEnv(gym.Env):
         self.this_fig_num = GridworldEnv.num_env
         self.viewer = None
 
+    def _seed(self, seed=None):
+        self.np_random, seed1 = seeding.np_random(seed)
+        return seed1
+
     def _step(self, action):
         """ return next observation, reward, finished, success """
         action = int(action)
-        info = {'success': False}
+        info = {'success': True}
         done = False
         reward = 0
         nxt_agent_state = (self.agent_state[0] + self.action_pos_dict[action][0],
                            self.agent_state[1] + self.action_pos_dict[action][1])
 
         if action == NOOP:
-            info['success'] = True
             return self.current_grid_map, reward, False, info
         next_state_out_of_map = (nxt_agent_state[0] < 0 or nxt_agent_state[0] >= self.grid_map_shape[0]) or \
                                 (nxt_agent_state[1] < 0 or nxt_agent_state[1] >= self.grid_map_shape[1])
@@ -84,23 +90,29 @@ class GridworldEnv(gym.Env):
             info['success'] = False
             return self.current_grid_map, reward, False, info
         elif target_position == TARGET:
+            done = True
+            reward = 1
             self.current_grid_map[nxt_agent_state[0], nxt_agent_state[1]] = SUCCESS
+        elif target_position == MINE:
+            done = True
+            reward = -1
+            self.current_grid_map[nxt_agent_state[0], nxt_agent_state[1]] = MINE
+
+        if done and self.restart_once_done:
+            self._reset()
+            return self.current_grid_map, reward, done, info
 
         self.current_grid_map[self.agent_state[0], self.agent_state[1]] = EMPTY
         self.agent_state = copy.deepcopy(nxt_agent_state)
-        info['success'] = True
-
-        if nxt_agent_state[0] == self.agent_target_state[0] and nxt_agent_state[1] == self.agent_target_state[1]:
-            done = True
-            reward = 1
-            if self.restart_once_done:
-                self._reset()
 
         return self.current_grid_map, reward, done, info
 
     def _reset(self):
-        self.agent_state = copy.deepcopy(self.agent_start_state)
         self.current_grid_map = copy.deepcopy(self.start_grid_map)
+        if self.stochastic:
+            self.select_stochastic(self.current_grid_map, TARGET)
+            self.select_stochastic(self.current_grid_map, AGENT)
+        self.agent_state, self.agent_target_state = self._get_agent_start_and_target_state()
         return self.current_grid_map
 
     def _read_grid_map(self, grid_map_path):
@@ -118,9 +130,17 @@ class GridworldEnv(gym.Env):
         grid_map_array = np.array(grid_map_array, dtype=int)
         return grid_map_array
 
-    def _get_agent_start_target_state(self):
-        start_state = np.where(self.start_grid_map == AGENT)
-        target_state = np.where(self.start_grid_map == TARGET)
+    def select_stochastic(self, grid_map_array, type):
+        target_idxs = np.nonzero(grid_map_array == type)
+        selected_target = np.random.randint(len(target_idxs[0]))
+        new_target_idxs = [[], []]
+        new_target_idxs[0] = np.delete(target_idxs[0], selected_target)
+        new_target_idxs[1] = np.delete(target_idxs[1], selected_target)
+        grid_map_array[new_target_idxs] = EMPTY
+
+    def _get_agent_start_and_target_state(self):
+        start_state = np.where(self.current_grid_map == AGENT)
+        target_state = np.where(self.current_grid_map == TARGET)
 
         start_or_target_not_found = not(start_state[0] and target_state[0])
         if start_or_target_not_found:
