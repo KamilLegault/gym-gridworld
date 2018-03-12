@@ -7,3 +7,9 @@ for i in range(10):
             kwargs={'plan': i, 'stochastic': stochastic},
             entry_point='gym_gridworld.envs:GridworldEnv',
         )
+
+register(
+    id='SequentialGridworld{}-v0'.format('Stochastic'),
+    kwargs={'plans': list(range(1, 6)), 'stochastic': True},
+    entry_point='gym_gridworld.envs:SequentialGridworldEnv',
+)
