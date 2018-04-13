@@ -28,7 +28,6 @@ RIGHT = 4
 class GridworldEnv(gym.Env):
     metadata = {'render.modes': ['human']}
     num_env = 0
-
     def __init__(self, plan, stochastic=False):
 
         self.stochastic = stochastic
@@ -58,6 +57,14 @@ class GridworldEnv(gym.Env):
         GridworldEnv.num_env += 1
         self.this_fig_num = GridworldEnv.num_env
         self.viewer = None
+        self.rewards = [0.0,1,-1]
+        self.isContinuous = True
+        
+    def set_rewards(rewards):
+        self.rewards = rewards
+        
+    def set_continous(isContinuous):
+        self.isContinuous = isContinuous
 
     def _seed(self, seed=None):
         self.np_random, seed1 = seeding.np_random(seed)
@@ -87,15 +94,17 @@ class GridworldEnv(gym.Env):
             self.current_grid_map[nxt_agent_state[0], nxt_agent_state[1]] = AGENT
         elif target_position == WALL:
             info['success'] = False
-            reward = 0.0
+            reward = self.rewards[0]
             return self.current_grid_map, reward, False, info
         elif target_position == TARGET:
-            done = True
-            reward = 1
+            if not self.isContinuous:
+                done = True
+            reward = self.rewards[1]
             # self.current_grid_map[nxt_agent_state[0], nxt_agent_state[1]] = SUCCESS
         elif target_position == MINE:
-            done = True
-            reward = -1
+            if not self.isContinuous:
+                done = True
+            reward = self.rewards[2]
             # self.current_grid_map[nxt_agent_state[0], nxt_agent_state[1]] = MINE
 
         # if done and self.restart_once_done:
