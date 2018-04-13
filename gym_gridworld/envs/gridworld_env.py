@@ -60,10 +60,10 @@ class GridworldEnv(gym.Env):
         self.rewards = [0.0,1,-1]
         self.isContinuous = True
         
-    def set_rewards(rewards):
+    def set_rewards(self, rewards):
         self.rewards = rewards
         
-    def set_continous(isContinuous):
+    def set_continous(self, isContinuous):
         self.isContinuous = isContinuous
 
     def _seed(self, seed=None):
