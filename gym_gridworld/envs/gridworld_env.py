@@ -58,7 +58,7 @@ class GridworldEnv(gym.Env):
         self.this_fig_num = GridworldEnv.num_env
         self.viewer = None
         self.rewards = [0.0,1,-1]
-        self.isContinuous = True
+        self.isContinuous = False
         
     def set_rewards(self, rewards):
         self.rewards = rewards
